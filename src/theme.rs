@@ -38,22 +38,22 @@ impl Palette {
     pub fn dark() -> Self {
         Self {
             dark: true,
-            window: Color32::from_rgb(0x0f, 0x11, 0x14),
-            panel: Color32::from_rgb(0x15, 0x18, 0x1c),
-            surface: Color32::from_rgb(0x1d, 0x21, 0x27),
-            surface_hover: Color32::from_rgb(0x26, 0x2b, 0x33),
-            surface_active: Color32::from_rgb(0x2f, 0x35, 0x3f),
-            outline: Color32::from_rgb(0x2a, 0x30, 0x38),
-            text: Color32::from_rgb(0xf2, 0xf4, 0xf6),
-            secondary: Color32::from_rgb(0xa9, 0xb1, 0xbc),
-            dim: Color32::from_rgb(0x6e, 0x77, 0x84),
-            accent: Color32::from_rgb(0x1e, 0xd7, 0x60),
-            accent_hover: Color32::from_rgb(0x3c, 0xe8, 0x7a),
-            on_accent: Color32::from_rgb(0x0a, 0x14, 0x0e),
+            window: Color32::from_rgb(0x12, 0x0d, 0x09),
+            panel: Color32::from_rgb(0x1a, 0x13, 0x0e),
+            surface: Color32::from_rgb(0x23, 0x1d, 0x19),
+            surface_hover: Color32::from_rgb(0x2e, 0x29, 0x24),
+            surface_active: Color32::from_rgb(0x3d, 0x37, 0x31),
+            outline: Color32::from_rgb(0x2f, 0x28, 0x22),
+            text: Color32::from_rgb(0xff, 0xf4, 0xe8),
+            secondary: Color32::from_rgb(0xbd, 0xb3, 0xaa),
+            dim: Color32::from_rgb(0x8c, 0x82, 0x79),
+            accent: Color32::from_rgb(0xf2, 0xb2, 0x5c),
+            accent_hover: Color32::from_rgb(0xf6, 0xc4, 0x7e),
+            on_accent: Color32::from_rgb(0x1a, 0x12, 0x0b),
             danger: Color32::from_rgb(0xf5, 0x71, 0x7f),
-            warning: Color32::from_rgb(0xf2, 0xb8, 0x5c),
-            overlay: Color32::from_rgb(0x22, 0x27, 0x2e),
-            shadow: Color32::from_black_alpha(140),
+            warning: Color32::from_rgb(0xff, 0xd2, 0x7a),
+            overlay: Color32::from_rgb(0x2a, 0x21, 0x1a),
+            shadow: Color32::from_black_alpha(160),
         }
     }
 
@@ -98,6 +98,86 @@ impl Palette {
         };
         Color32::from_rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
     }
+
+    /// A colour derived from album art that is vivid enough to mark controls,
+    /// or `None` for nearly grey art, which would make a muddy accent.
+    pub fn accent_from_art(&self, rgb: [u8; 3]) -> Option<Color32> {
+        let [h, s, _] = hsl(rgb);
+        if s < 0.12 {
+            return None;
+        }
+        let lightness = if self.dark { 0.70 } else { 0.38 };
+        Some(from_hsl(h, s.clamp(0.5, 0.9), lightness))
+    }
+
+    /// This palette with `accent` marking its controls.
+    pub fn with_accent(mut self, accent: Color32) -> Self {
+        let [h, s, l] = hsl([accent.r(), accent.g(), accent.b()]);
+        self.accent = accent;
+        self.accent_hover = from_hsl(
+            h,
+            s,
+            if self.dark {
+                (l + 0.08).min(0.9)
+            } else {
+                (l - 0.06).max(0.1)
+            },
+        );
+        self.on_accent = if relative_luminance(accent) > 0.4 {
+            Color32::from_rgb(0x1a, 0x12, 0x0b)
+        } else {
+            Color32::WHITE
+        };
+        self
+    }
+}
+
+fn hsl([r, g, b]: [u8; 3]) -> [f32; 3] {
+    let [r, g, b] = [r, g, b].map(|c| c as f32 / 255.0);
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let l = (max + min) / 2.0;
+    let d = max - min;
+    if d < f32::EPSILON {
+        return [0.0, 0.0, l];
+    }
+    let s = d / (1.0 - (2.0 * l - 1.0).abs());
+    let h = if max == r {
+        ((g - b) / d).rem_euclid(6.0)
+    } else if max == g {
+        (b - r) / d + 2.0
+    } else {
+        (r - g) / d + 4.0
+    } * 60.0;
+    [h, s, l]
+}
+
+fn from_hsl(h: f32, s: f32, l: f32) -> Color32 {
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let x = c * (1.0 - ((h / 60.0).rem_euclid(2.0) - 1.0).abs());
+    let m = l - c / 2.0;
+    let (r, g, b) = match (h / 60.0) as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let channel = |v: f32| ((v + m).clamp(0.0, 1.0) * 255.0).round() as u8;
+    Color32::from_rgb(channel(r), channel(g), channel(b))
+}
+
+fn relative_luminance(color: Color32) -> f32 {
+    let linear = |c: u8| {
+        let c = c as f32 / 255.0;
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * linear(color.r()) + 0.7152 * linear(color.g()) + 0.0722 * linear(color.b())
 }
 
 impl fastframe_theme::Palette for Palette {
@@ -225,6 +305,19 @@ pub fn semibold(size: f32) -> egui::FontId {
 
 pub fn bold(size: f32) -> egui::FontId {
     fastframe_fonts::Weight::Bold.font_id(size)
+}
+
+const DISPLAY: &str = "display";
+const HEADING: &str = "heading";
+
+/// Bricolage Grotesque ExtraBold, for titles of 28 points and up.
+pub fn display(size: f32) -> egui::FontId {
+    egui::FontId::new(size, egui::FontFamily::Name(DISPLAY.into()))
+}
+
+/// Bricolage Grotesque Bold, for section headings.
+pub fn heading(size: f32) -> egui::FontId {
+    egui::FontId::new(size, egui::FontFamily::Name(HEADING.into()))
 }
 
 /// How the desktop renders text, read once per process.
@@ -376,8 +469,29 @@ fn install_fonts(ctx: &egui::Context) {
     let mut fonts = fastframe_fonts::FontSetup::default()
         .companion("noto_emoji", std::sync::Arc::new(emoji))
         .definitions();
+    add_display_faces(&mut fonts);
     text_rendering().apply_to(&mut fonts);
     ctx.set_fonts(fonts);
+}
+
+/// Bricolage Grotesque for titles and headings. It draws Latin only, so
+/// each family falls back to Inter Bold and its companions.
+fn add_display_faces(fonts: &mut egui::FontDefinitions) {
+    use egui::epaint::text::VariationCoords;
+    const BRICOLAGE: &[u8] = include_bytes!("../assets/fonts/BricolageGrotesque.ttf");
+    let behind = fonts.families[&fastframe_fonts::Weight::Bold.family()].clone();
+    for (name, weight, optical_size) in [(DISPLAY, 800.0, 72.0), (HEADING, 700.0, 24.0)] {
+        let mut data = egui::FontData::from_static(BRICOLAGE);
+        data.tweak.coords = VariationCoords::new([(b"wght", weight), (b"opsz", optical_size)]);
+        fonts
+            .font_data
+            .insert(name.to_owned(), std::sync::Arc::new(data));
+        let mut family = vec![name.to_owned()];
+        family.extend(behind.iter().cloned());
+        fonts
+            .families
+            .insert(egui::FontFamily::Name(name.into()), family);
+    }
 }
 
 fastframe_icons::icons! {
@@ -888,7 +1002,7 @@ pub fn link(
 }
 
 pub fn section_title(ui: &mut egui::Ui, palette: &Palette, label: &str) -> Response {
-    text(ui, label, bold(17.0), palette.text)
+    text(ui, label, heading(20.0), palette.text)
 }
 
 pub fn subtle(ui: &mut egui::Ui, palette: &Palette, label: &str) -> Response {

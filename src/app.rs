@@ -269,7 +269,11 @@ pub struct App {
     control_devices_stale: bool,
     /// Sample data is loaded; Spotify requests are disabled.
     pub offline: bool,
+    /// What the interface draws with: [`Self::theme_palette`] with the
+    /// accent from [`Settings::accent`].
     pub palette: Palette,
+    theme_palette: Palette,
+    accent_shown: Option<Color32>,
     /// The language the interface is drawn in: [`Settings::language`]
     /// resolved against the operating system's preferred languages.
     pub locale: crate::i18n::Locale,
@@ -397,6 +401,9 @@ pub struct App {
     /// Optimistic library writes that a stale contains response must not undo.
     saved_writes: HashMap<String, bool>,
     pub accents: HashMap<String, Color32>,
+    /// Each cover's colour as the backend measured it, before any theme
+    /// adjusts it.
+    art_colors: HashMap<String, [u8; 3]>,
     accent_pending: HashSet<String>,
 
     pub dialog: Option<Dialog>,
@@ -763,6 +770,8 @@ impl App {
             control_devices_stale: true,
             offline: false,
             palette,
+            theme_palette: palette,
+            accent_shown: None,
             locale,
             window_level_supported: true,
             taskbar_hiding_supported: cfg!(windows),
@@ -850,6 +859,7 @@ impl App {
             saved_recordings: HashSet::new(),
             saved_writes: HashMap::new(),
             accents: HashMap::new(),
+            art_colors: HashMap::new(),
             accent_pending: HashSet::new(),
             dialog: None,
             cover_request: 0,
@@ -1862,6 +1872,7 @@ impl App {
                 Event::Accent { url, color } => {
                     self.accent_pending.remove(&url);
                     let tint = self.palette.tint_from_art(color);
+                    self.art_colors.insert(url.clone(), color);
                     self.accents.insert(url, tint);
                 }
                 Event::ProxyRestored { config, password } => {
@@ -3238,7 +3249,7 @@ impl App {
                 Palette::light()
             }
         });
-        if self.applied_dark != Some(dark) || self.palette != palette {
+        if self.applied_dark != Some(dark) || self.theme_palette != palette {
             // The first colours need no reveal, and the mini player's window
             // is drawn by its skin.
             if self.reveal_theme_changes
@@ -3251,10 +3262,80 @@ impl App {
                 }
             }
             self.palette = palette;
+            self.theme_palette = palette;
+            self.accent_shown = None;
             theme::apply(ctx, &self.palette);
             self.applied_dark = Some(dark);
             self.accents.clear();
             self.accent_pending.clear();
+        }
+    }
+
+    /// The selected theme's own accent, before [`Settings::accent`].
+    pub fn theme_accent(&self) -> Color32 {
+        self.theme_palette.accent
+    }
+
+    /// The accent [`Settings::accent`] asks for right now.
+    fn target_accent(&mut self) -> Color32 {
+        use crate::settings::AccentChoice;
+        let base = self.theme_palette;
+        match self.settings.accent {
+            AccentChoice::Theme => base.accent,
+            AccentChoice::AlbumArt => self
+                .now_playing()
+                .and_then(|now| now.art_small.or(now.art_url))
+                .and_then(|url| self.art_color(&url))
+                .and_then(|rgb| base.accent_from_art(rgb))
+                .unwrap_or(base.accent),
+            preset => preset.color().unwrap_or(base.accent),
+        }
+    }
+
+    /// The colour the backend measured for a cover, asking for it the first
+    /// time.
+    fn art_color(&mut self, url: &str) -> Option<[u8; 3]> {
+        if let Some(color) = self.art_colors.get(url) {
+            return Some(*color);
+        }
+        if self.accent_pending.insert(url.to_string()) {
+            self.backend.send(Command::Accent {
+                url: url.to_string(),
+            });
+        }
+        None
+    }
+
+    /// Moves the drawn accent toward [`Self::target_accent`], easing over
+    /// about half a second so a new song's colour arrives rather than jumps.
+    fn apply_accent(&mut self, ctx: &egui::Context) {
+        let target = self.target_accent();
+        let shown = match self.accent_shown {
+            Some(shown) if shown != target => {
+                let dt = ctx.input(|input| input.stable_dt).min(0.1);
+                let step = 1.0 - (-dt * 9.0).exp();
+                let next = shown.lerp_to_gamma(target, step);
+                let close = [0, 1, 2]
+                    .into_iter()
+                    .all(|i| next.to_array()[i].abs_diff(target.to_array()[i]) <= 2);
+                if close {
+                    target
+                } else {
+                    ctx.request_repaint();
+                    next
+                }
+            }
+            _ => target,
+        };
+        self.accent_shown = Some(shown);
+        let palette = if shown == self.theme_palette.accent {
+            self.theme_palette
+        } else {
+            self.theme_palette.with_accent(shown)
+        };
+        if self.palette != palette {
+            self.palette = palette;
+            theme::apply(ctx, &self.palette);
         }
     }
 
@@ -9834,6 +9915,7 @@ impl App {
         let ctx = &ctx;
         self.refresh_frame_now();
         self.apply_theme(ctx);
+        self.apply_accent(ctx);
         let autoscroll_on = crate::autoscroll::enabled(self.settings.middle_click_autoscroll);
         self.autoscroll.begin(ctx, autoscroll_on);
         if self.autoscroll.active() {

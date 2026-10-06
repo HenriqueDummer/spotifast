@@ -6,7 +6,7 @@ use crate::api::models::pick_image;
 use crate::app::App;
 use crate::i18n::{gettext, ngettext, pgettext};
 use crate::model::{Action, Dialog};
-use crate::settings::{LanguageChoice, ProxyMode, ThemeChoice};
+use crate::settings::{AccentChoice, LanguageChoice, ProxyMode, ThemeChoice};
 use crate::theme::{self, Icon, Palette};
 
 use super::widgets;
@@ -200,7 +200,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     theme::text(
         ui,
         gettext(locale, "Settings"),
-        theme::bold(28.0),
+        theme::display(28.0),
         palette.text,
     );
     ui.add_space(4.0);
@@ -800,6 +800,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let theme_guide = gettext(locale, "How to make a theme");
     let themes_folder = gettext(locale, "Open themes folder");
     let accent_from_art = gettext(locale, "Colour from album art");
+    let accent_title = gettext(locale, "Accent colour");
     let sidebar_compact = gettext(locale, "Compact library sidebar");
     let tracklist_compact = gettext(locale, "Compact track list");
     let middle_click = gettext(locale, "Middle-click autoscroll");
@@ -835,6 +836,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             gettext(
                 locale,
                 "Use the current cover's colour on pages and the player bar.",
+            ),
+        ),
+        RowText::new(
+            accent_title.clone(),
+            gettext(
+                locale,
+                "Marks play buttons, liked songs and what is playing. Album art follows the playing cover.",
             ),
         ),
         RowText::new(
@@ -1011,6 +1019,19 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     }
                 },
             );
+            filtered_row_sized(
+                ui,
+                &palette,
+                &needle,
+                &appearance,
+                &appearance_rows[3],
+                ACCENT_SWATCHES_WIDTH,
+                |ui| {
+                    if accent_swatches(app, ui) {
+                        changed = true;
+                    }
+                },
+            );
             {
                 use crate::settings::PlayerBarVis;
                 let choices = [
@@ -1029,7 +1050,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     &palette,
                     &needle,
                     &appearance,
-                    &appearance_rows[8],
+                    &appearance_rows[9],
                     choices_width,
                     |ui| {
                         let mut choose = |ui: &mut egui::Ui, mode: PlayerBarVis, label: &str| {
@@ -1071,7 +1092,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 &palette,
                 &needle,
                 &appearance,
-                &appearance_rows[3],
+                &appearance_rows[4],
                 |ui| {
                     if widgets::switch(
                         ui,
@@ -1090,7 +1111,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 &palette,
                 &needle,
                 &appearance,
-                &appearance_rows[4],
+                &appearance_rows[5],
                 |ui| {
                     if widgets::switch(
                         ui,
@@ -1109,7 +1130,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 &palette,
                 &needle,
                 &appearance,
-                &appearance_rows[5],
+                &appearance_rows[6],
                 |ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 6.0;
@@ -1140,7 +1161,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     &palette,
                     &needle,
                     &appearance,
-                    &appearance_rows[6],
+                    &appearance_rows[7],
                     |ui| {
                         if widgets::switch(
                             ui,
@@ -1161,7 +1182,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     &palette,
                     &needle,
                     &appearance,
-                    &appearance_rows[7],
+                    &appearance_rows[8],
                     |ui| {
                         let mut custom = app.settings.custom_titlebar;
                         if widgets::switch(ui, &palette, &custom_titlebar, &mut custom).changed() {
@@ -1941,6 +1962,94 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 /// A band's frequency the short way: 60, 170, 1K, 16K.
 /// The interface language: System first, then each language by its own name,
 /// so a reader can find theirs whatever language the app is showing.
+const ACCENT_SWATCH: f32 = 32.0;
+const ACCENT_SWATCH_GAP: f32 = 8.0;
+const ACCENT_SWATCHES_WIDTH: f32 = AccentChoice::ALL.len() as f32 * ACCENT_SWATCH
+    + (AccentChoice::ALL.len() - 1) as f32 * ACCENT_SWATCH_GAP;
+
+/// One round swatch per [`AccentChoice`], acting as radio buttons. Returns
+/// whether the choice changed.
+fn accent_swatches(app: &mut App, ui: &mut egui::Ui) -> bool {
+    let locale = app.locale;
+    let palette = app.palette;
+    let art = app
+        .now_playing()
+        .and_then(|now| now.art_small.or(now.art_url));
+    let mut changed = false;
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = Vec2::splat(ACCENT_SWATCH_GAP);
+        for choice in AccentChoice::ALL {
+            let label = match choice {
+                AccentChoice::AlbumArt => gettext(locale, "Album art"),
+                AccentChoice::Theme => gettext(locale, "Theme colour"),
+                AccentChoice::Amber => gettext(locale, "Amber"),
+                AccentChoice::Sky => gettext(locale, "Sky"),
+                AccentChoice::Lavender => gettext(locale, "Lavender"),
+                AccentChoice::Mint => gettext(locale, "Mint"),
+                AccentChoice::Rose => gettext(locale, "Rose"),
+                AccentChoice::Green => gettext(locale, "Green"),
+            };
+            let selected = app.settings.accent == choice;
+            let (rect, response) =
+                ui.allocate_exact_size(Vec2::splat(ACCENT_SWATCH), egui::Sense::click());
+            if response.clicked() && !selected {
+                app.settings.accent = choice;
+                changed = true;
+            }
+            if ui.is_rect_visible(rect) {
+                let painter = ui.painter();
+                let dot = rect.shrink(4.0);
+                let radius = dot.width() / 2.0;
+                match (choice, &art) {
+                    (AccentChoice::AlbumArt, Some(url)) => {
+                        egui::Image::new(url.as_str())
+                            .corner_radius(radius)
+                            .paint_at(ui, dot);
+                    }
+                    (AccentChoice::AlbumArt, None) => {
+                        painter.circle_filled(dot.center(), radius, palette.surface_active);
+                        theme::paint_icon(ui, Icon::Disc, dot, 14.0, palette.secondary);
+                    }
+                    (AccentChoice::Theme, _) => {
+                        painter.circle_filled(dot.center(), radius, app.theme_accent());
+                        painter.circle_stroke(
+                            dot.center(),
+                            radius,
+                            Stroke::new(1.0, palette.outline),
+                        );
+                    }
+                    (preset, _) => {
+                        if let Some(color) = preset.color() {
+                            painter.circle_filled(dot.center(), radius, color);
+                        }
+                    }
+                }
+                let ring = if selected {
+                    Some(Stroke::new(2.0, palette.text))
+                } else if response.hovered() {
+                    Some(Stroke::new(1.5, palette.dim))
+                } else {
+                    None
+                };
+                if let Some(ring) = ring {
+                    painter.circle_stroke(rect.center(), ACCENT_SWATCH / 2.0 - 1.0, ring);
+                }
+            }
+            response.widget_info(|| {
+                egui::WidgetInfo::selected(
+                    egui::WidgetType::RadioButton,
+                    ui.is_enabled(),
+                    selected,
+                    label.as_ref(),
+                )
+            });
+            theme::focus_ring(ui, &response);
+            response.on_hover_text(label.as_ref());
+        }
+    });
+    changed
+}
+
 fn language_picker(app: &mut App, ui: &mut egui::Ui) {
     let locale = app.locale;
     let system = pgettext(locale, "language", "System");

@@ -77,6 +77,50 @@ pub enum PlayerBarVis {
     Waveform,
 }
 
+/// The colour that marks play buttons, liked hearts and the playing row.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AccentChoice {
+    /// Follows the playing song's cover, or the theme's when the cover is grey.
+    #[default]
+    AlbumArt,
+    /// The accent the selected theme defines.
+    Theme,
+    Amber,
+    Sky,
+    Lavender,
+    Mint,
+    Rose,
+    Green,
+}
+
+impl AccentChoice {
+    pub const ALL: [Self; 8] = [
+        Self::AlbumArt,
+        Self::Theme,
+        Self::Amber,
+        Self::Sky,
+        Self::Lavender,
+        Self::Mint,
+        Self::Rose,
+        Self::Green,
+    ];
+
+    /// The fixed colour of a preset; `None` for the two that follow something.
+    pub fn color(self) -> Option<egui::Color32> {
+        let rgb = |r, g, b| Some(egui::Color32::from_rgb(r, g, b));
+        match self {
+            Self::AlbumArt | Self::Theme => None,
+            Self::Amber => rgb(0xf2, 0xb2, 0x5c),
+            Self::Sky => rgb(0x7c, 0xc6, 0xe8),
+            Self::Lavender => rgb(0xc4, 0x9c, 0xf0),
+            Self::Mint => rgb(0x7f, 0xdc, 0xb0),
+            Self::Rose => rgb(0xf2, 0x9b, 0xb0),
+            Self::Green => rgb(0x1e, 0xd7, 0x60),
+        }
+    }
+}
+
 impl PlayerBarVis {
     /// The mode a click on the player bar moves to: spectrum, waveform,
     /// then off, as Winamp's visualizer cycles.
@@ -262,6 +306,7 @@ pub struct Settings {
     pub home: HomeSettings,
     /// Tint the interface with the colour of the playing album's art.
     pub accent_from_art: bool,
+    pub accent: AccentChoice,
     /// A spectrum or waveform of the playing song behind the player bar.
     pub player_bar_vis: PlayerBarVis,
     /// Last local volume, 0..=65535.
@@ -431,6 +476,7 @@ impl Default for Settings {
             system_theme_cache: None,
             home: HomeSettings::default(),
             accent_from_art: true,
+            accent: AccentChoice::default(),
             player_bar_vis: PlayerBarVis::Off,
             volume: (u16::MAX as u32 * 70 / 100) as u16,
             sidebar_visible: true,

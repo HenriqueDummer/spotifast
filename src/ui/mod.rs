@@ -253,6 +253,42 @@ fn page_tint(app: &mut App) -> Option<Color32> {
     }
 }
 
+/// How strongly the blurred cover shows through the window colour.
+const BACKDROP_STRENGTH: f32 = 0.38;
+
+/// The playing song's cover, blurred, behind the page and fading into the
+/// window colour toward the bottom. Returns false when there is nothing to
+/// show, so the page can tint its header instead.
+fn paint_backdrop(app: &mut App, ui: &mut egui::Ui, rect: Rect) -> bool {
+    if !app.settings.accent_from_art {
+        return false;
+    }
+    let art = app
+        .now_playing()
+        .and_then(|now| lyrics::preferred_backdrop_art(now.art_small, now.art_url));
+    let Some(texture) = app
+        .lyrics_backdrop
+        .texture(ui.ctx(), app.backend.art(), art.as_deref())
+    else {
+        return false;
+    };
+    let (id, size) = (texture.id(), texture.size_vec2());
+    ui.painter().with_clip_rect(rect).image(
+        id,
+        rect,
+        lyrics::cover_uv(rect.size(), size),
+        Color32::WHITE.gamma_multiply(BACKDROP_STRENGTH),
+    );
+    let window = app.palette.window;
+    widgets::paint_vertical_gradient(
+        ui,
+        rect,
+        window.gamma_multiply(0.2),
+        window.gamma_multiply(0.95),
+    );
+    true
+}
+
 fn central(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     let tint = page_tint(app);
@@ -260,7 +296,9 @@ fn central(app: &mut App, ui: &mut egui::Ui) {
         .frame(Frame::new().fill(palette.window))
         .show(ui, |ui| {
             let rect = ui.max_rect();
-            if let Some(tint) = tint {
+            if !paint_backdrop(app, ui, rect)
+                && let Some(tint) = tint
+            {
                 let strength = if matches!(
                     app.page(),
                     Page::Home | Page::Search | Page::Settings | Page::Queue

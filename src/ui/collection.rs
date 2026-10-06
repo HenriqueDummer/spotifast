@@ -106,7 +106,7 @@ pub(super) fn hero(app: &mut App, ui: &mut egui::Ui, hero: Hero<'_>) {
             loop {
                 let galley = ui.painter().layout_no_wrap(
                     hero.title.to_string(),
-                    theme::bold(size),
+                    theme::display(size),
                     palette.text,
                 );
                 if galley.size().x <= width || size <= 22.0 {
@@ -114,7 +114,7 @@ pub(super) fn hero(app: &mut App, ui: &mut egui::Ui, hero: Hero<'_>) {
                 }
                 size -= 6.0;
             }
-            theme::text(ui, hero.title, theme::bold(size), palette.text);
+            theme::text(ui, hero.title, theme::display(size), palette.text);
             if let Some(description) = &hero.description
                 && !description.is_empty()
             {
@@ -1285,7 +1285,7 @@ pub fn top_songs(app: &mut App, ui: &mut egui::Ui) {
     theme::text(
         ui,
         gettext(app.locale, "Your top songs"),
-        theme::bold(30.0),
+        theme::display(30.0),
         palette.text,
     );
     ui.add_space(4.0);

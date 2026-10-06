@@ -21,7 +21,7 @@ pub fn page(app: &mut App, ui: &mut egui::Ui) {
         theme::text(
             ui,
             gettext(app.locale, "Queue"),
-            theme::bold(28.0),
+            theme::display(28.0),
             palette.text,
         );
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

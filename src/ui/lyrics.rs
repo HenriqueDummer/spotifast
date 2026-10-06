@@ -475,7 +475,10 @@ fn fullscreen_content_width(viewport_width: f32) -> f32 {
     (viewport_width * 0.72).clamp(400.0, 960.0).min(available)
 }
 
-fn preferred_backdrop_art(small: Option<String>, large: Option<String>) -> Option<String> {
+pub(super) fn preferred_backdrop_art(
+    small: Option<String>,
+    large: Option<String>,
+) -> Option<String> {
     small.or(large)
 }
 
@@ -505,7 +508,7 @@ fn background(app: &mut App, ui: &mut egui::Ui, rect: Rect) {
     );
 }
 
-fn cover_uv(view: egui::Vec2, image: egui::Vec2) -> Rect {
+pub(super) fn cover_uv(view: egui::Vec2, image: egui::Vec2) -> Rect {
     let ratio = (view.x / view.y.max(1.0)) / (image.x / image.y.max(1.0));
     let size = if ratio > 1.0 {
         vec2(1.0, 1.0 / ratio)

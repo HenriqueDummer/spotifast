@@ -327,7 +327,7 @@ fn top_result(
             text_clip.right(),
             text_clip.top() + 16.0,
             title,
-            theme::bold(26.0),
+            theme::display(28.0),
             palette.text,
         );
         match subtitle {

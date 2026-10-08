@@ -3804,7 +3804,7 @@ impl App {
             }
             Page::Radio(seed) => self.load_radio(&seed),
             Page::Queue => self.refresh_queue(true),
-            Page::Settings => {}
+            Page::Settings | Page::Library | Page::NowPlaying => {}
         }
     }
 
@@ -9113,6 +9113,10 @@ impl App {
                     self.mark_settings_dirty();
                 }
             }
+            Action::SetLibraryPageList(list) => {
+                self.settings.library_page_list = list;
+                self.mark_settings_dirty();
+            }
             Action::SetLibraryGrid(grid) => {
                 self.settings.sidebar_grid = grid;
                 self.mark_settings_dirty();
@@ -9916,6 +9920,7 @@ impl App {
         self.refresh_frame_now();
         self.apply_theme(ctx);
         self.apply_accent(ctx);
+        theme::set_reduce_motion(ctx, self.settings.reduce_motion);
         let autoscroll_on = crate::autoscroll::enabled(self.settings.middle_click_autoscroll);
         self.autoscroll.begin(ctx, autoscroll_on);
         if self.autoscroll.active() {
@@ -10601,15 +10606,15 @@ mod tests {
 
         let mut commands = Vec::new();
         for _ in 0..3 {
-            commands.extend(draw(&ctx, &mut app, 1000.0));
+            commands.extend(draw(&ctx, &mut app, 1200.0));
         }
         let least = crate::ui::topbar::least_width(&ctx);
         let sidebar = panel(&ctx, "sidebar");
         let queue = panel(&ctx, "queue-panel");
         assert!(
-            sidebar + queue + least <= 1000.5,
+            sidebar + queue + least <= 1200.5,
             "the page keeps {} of the {least} points its bar needs",
-            1000.0 - sidebar - queue
+            1200.0 - sidebar - queue
         );
         assert!(sidebar >= 210.0 && queue >= crate::theme::SIDE_PANEL_MIN_WIDTH);
         assert_eq!(app.settings.sidebar_width, 400.0);
@@ -10629,13 +10634,16 @@ mod tests {
         assert_eq!(panel(&ctx, "sidebar"), 400.0);
         assert_eq!(panel(&ctx, "queue-panel"), 500.0);
 
-        // Closing the Queue gives the window its usual minimum back.
+        // Closing the Queue gives the window back the minimum the sidebar
+        // and the top bar need, which the tabs put above the usual one.
         app.show_queue_panel = false;
         let commands = draw(&ctx, &mut app, 1800.0);
+        let without_queue = (crate::ui::SIDEBAR_MIN_WIDTH + least)
+            .max(crate::window::MAIN_MIN_SIZE[0])
+            .round();
         assert!(commands.iter().any(|command| matches!(
             command,
-            egui::ViewportCommand::MinInnerSize(size)
-                if size.x == crate::window::MAIN_MIN_SIZE[0]
+            egui::ViewportCommand::MinInnerSize(size) if size.x == without_queue
         )));
     }
 
@@ -15177,7 +15185,10 @@ mod tests {
                 state: root.join("state"),
                 cache: root.join("cache"),
             },
-            Settings::default(),
+            Settings {
+                sidebar_visible: true,
+                ..Settings::default()
+            },
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -16278,7 +16289,10 @@ mod tests {
         let mut app = App::new(
             &Waker::default(),
             dirs.clone(),
-            Settings::default(),
+            Settings {
+                sidebar_visible: true,
+                ..Settings::default()
+            },
             options,
         );
         app.local_ready = true;

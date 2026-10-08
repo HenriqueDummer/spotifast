@@ -3166,3 +3166,55 @@ msgstr ""
 
 #~ msgid "Reduce lyrics motion"
 #~ msgstr "Reduzir movimento da letra"
+
+#: src/ui/settings.rs
+msgid "Accent colour"
+msgstr "Cor de destaque"
+
+#: src/ui/settings.rs
+msgid "Marks play buttons, liked songs and what is playing. Album art follows the playing cover."
+msgstr "Destaca os botões de reprodução, as músicas curtidas e o que está tocando. Capa do álbum acompanha a capa que está tocando."
+
+#: src/ui/settings.rs
+msgid "Album art"
+msgstr "Capa do álbum"
+
+#: src/ui/settings.rs
+msgid "Theme colour"
+msgstr "Cor do tema"
+
+#: src/ui/settings.rs
+msgid "Amber"
+msgstr "Âmbar"
+
+#: src/ui/settings.rs
+msgid "Sky"
+msgstr "Céu"
+
+#: src/ui/settings.rs
+msgid "Lavender"
+msgstr "Lavanda"
+
+#: src/ui/settings.rs
+msgid "Mint"
+msgstr "Menta"
+
+#: src/ui/settings.rs
+msgid "Rose"
+msgstr "Rosa"
+
+#: src/ui/settings.rs
+msgid "Green"
+msgstr "Verde"
+
+#: src/ui/settings.rs
+msgid "Reduce motion"
+msgstr "Reduzir movimento"
+
+#: src/ui/settings.rs
+msgid "Change covers, tabs and buttons at once instead of sliding or popping them."
+msgstr "Troca capas, abas e botões na hora, sem deslizar nem animar."
+
+#: src/ui/lyrics.rs
+msgid "Pick something from Home or your Library."
+msgstr "Escolha algo no Início ou na sua Biblioteca."

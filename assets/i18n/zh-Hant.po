@@ -3077,3 +3077,55 @@ msgstr "在 Wayland 上，請使用桌面環境的「最上層顯示」快捷鍵
 
 #~ msgid "Reduce lyrics motion"
 #~ msgstr "減少歌詞動畫"
+
+#: src/ui/settings.rs
+msgid "Accent colour"
+msgstr "強調色"
+
+#: src/ui/settings.rs
+msgid "Marks play buttons, liked songs and what is playing. Album art follows the playing cover."
+msgstr "用於播放按鈕、已按讚的歌曲和正在播放的內容。「專輯封面」會跟隨正在播放的封面變化。"
+
+#: src/ui/settings.rs
+msgid "Album art"
+msgstr "專輯封面"
+
+#: src/ui/settings.rs
+msgid "Theme colour"
+msgstr "主題顏色"
+
+#: src/ui/settings.rs
+msgid "Amber"
+msgstr "琥珀色"
+
+#: src/ui/settings.rs
+msgid "Sky"
+msgstr "天藍色"
+
+#: src/ui/settings.rs
+msgid "Lavender"
+msgstr "薰衣草色"
+
+#: src/ui/settings.rs
+msgid "Mint"
+msgstr "薄荷色"
+
+#: src/ui/settings.rs
+msgid "Rose"
+msgstr "玫瑰色"
+
+#: src/ui/settings.rs
+msgid "Green"
+msgstr "綠色"
+
+#: src/ui/settings.rs
+msgid "Reduce motion"
+msgstr "減少動態效果"
+
+#: src/ui/settings.rs
+msgid "Change covers, tabs and buttons at once instead of sliding or popping them."
+msgstr "立即切換封面、分頁和按鈕，不使用滑動或彈出動畫。"
+
+#: src/ui/lyrics.rs
+msgid "Pick something from Home or your Library."
+msgstr "從首頁或音樂庫中選擇一些內容。"

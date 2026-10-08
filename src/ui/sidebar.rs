@@ -278,7 +278,7 @@ fn finish_entry_interaction(
             app.actions.push(Action::Open(entry.page.clone()));
         }
     }
-    if !app.settings.sidebar_grid
+    if !shows_grid(app)
         && response.double_clicked()
         && entry.folder.is_none()
         && !cover_took_click
@@ -506,7 +506,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         if let Some(rect) = art_rect.filter(|_| !floating_art) {
             reserve_expanded_art(ui, rect);
         }
-        contents(app, ui, art_rect.filter(|_| floating_art));
+        contents(app, ui, art_rect.filter(|_| floating_art), false);
         if let Some(rect) = art_rect {
             if floating_art {
                 paint_grid_art_mask(app, ui, rect);
@@ -823,17 +823,16 @@ fn nav_row(
     response
 }
 
-fn contents(app: &mut App, ui: &mut egui::Ui, grid_art: Option<Rect>) {
+/// Home and Search, above the sidebar's library.
+fn nav_rows(app: &mut App, ui: &mut egui::Ui, page: &Page) {
     let palette = app.palette;
-    let page = app.page().clone();
     let locale = app.locale;
-    ui.add_space(4.0);
     if nav_row(
         ui,
         &palette,
         Icon::House,
         &gettext(locale, "Home"),
-        page == Page::Home,
+        *page == Page::Home,
     )
     .clicked()
     {
@@ -844,7 +843,7 @@ fn contents(app: &mut App, ui: &mut egui::Ui, grid_art: Option<Rect>) {
         &palette,
         Icon::Search,
         &gettext(locale, "Search"),
-        page == Page::Search,
+        *page == Page::Search,
     )
     .clicked()
     {
@@ -857,6 +856,31 @@ fn contents(app: &mut App, ui: &mut egui::Ui, grid_art: Option<Rect>) {
         egui::Stroke::new(1.0, palette.outline),
     );
     ui.add_space(10.0);
+}
+
+/// Whether the library is drawn as cover cards: the Library page has its
+/// own choice, cards unless rows were picked.
+fn shows_grid(app: &App) -> bool {
+    if *app.page() == Page::Library {
+        !app.settings.library_page_list
+    } else {
+        app.settings.sidebar_grid
+    }
+}
+
+/// The Library page: the sidebar's library, filling the page.
+pub fn page(app: &mut App, ui: &mut egui::Ui) {
+    contents(app, ui, None, true);
+}
+
+fn contents(app: &mut App, ui: &mut egui::Ui, grid_art: Option<Rect>, in_page: bool) {
+    let palette = app.palette;
+    let page = app.page().clone();
+    let locale = app.locale;
+    ui.add_space(4.0);
+    if !in_page {
+        nav_rows(app, ui, &page);
+    }
 
     let filter_id = egui::Id::new("sidebar-filter");
     let mut filter = ui
@@ -871,26 +895,29 @@ fn contents(app: &mut App, ui: &mut egui::Ui, grid_art: Option<Rect>) {
 
     ui.horizontal(|ui| {
         ui.add_space(6.0);
-        theme::icon(ui, Icon::Library, 22.0, palette.secondary);
-        ui.add_space(2.0);
+        if !in_page {
+            theme::icon(ui, Icon::Library, 22.0, palette.secondary);
+            ui.add_space(2.0);
+        }
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 2.0;
-            if theme::icon_button(
-                ui,
-                Icon::PanelLeft,
-                16.0,
-                palette.secondary,
-                palette.text,
-                super::keys::platform_shortcut(
-                    &gettext(locale, "Hide sidebar (Ctrl+B)"),
-                    &gettext(locale, "Hide sidebar (Cmd+B)"),
-                ),
-            )
-            .clicked()
+            if !in_page
+                && theme::icon_button(
+                    ui,
+                    Icon::PanelLeft,
+                    16.0,
+                    palette.secondary,
+                    palette.text,
+                    super::keys::platform_shortcut(
+                        &gettext(locale, "Hide sidebar (Ctrl+B)"),
+                        &gettext(locale, "Hide sidebar (Cmd+B)"),
+                    ),
+                )
+                .clicked()
             {
                 app.actions.push(Action::ToggleSidebar);
             }
-            let grid = app.settings.sidebar_grid;
+            let grid = shows_grid(app);
             let (icon, label) = if grid {
                 (Icon::LayoutList, gettext(locale, "Show as list"))
             } else {
@@ -898,7 +925,11 @@ fn contents(app: &mut App, ui: &mut egui::Ui, grid_art: Option<Rect>) {
             };
             if theme::icon_button(ui, icon, 16.0, palette.secondary, palette.text, &label).clicked()
             {
-                app.actions.push(Action::SetLibraryGrid(!grid));
+                app.actions.push(if in_page {
+                    Action::SetLibraryPageList(grid)
+                } else {
+                    Action::SetLibraryGrid(!grid)
+                });
             }
             // One item never deserved a menu: the plus creates directly.
             if theme::icon_button(
@@ -941,15 +972,20 @@ fn contents(app: &mut App, ui: &mut egui::Ui, grid_art: Option<Rect>) {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 let heading = gettext(locale, "Library");
                 let room = ui.available_width() - 6.0;
-                let fits = [15.0, 14.0, 13.0].into_iter().find(|&size| {
+                let (sizes, font): ([f32; 3], fn(f32) -> egui::FontId) = if in_page {
+                    ([44.0, 36.0, 28.0], theme::display)
+                } else {
+                    ([15.0, 14.0, 13.0], theme::bold)
+                };
+                let fits = sizes.into_iter().find(|&size| {
                     ui.painter()
-                        .layout_no_wrap(heading.to_string(), theme::bold(size), palette.text)
+                        .layout_no_wrap(heading.to_string(), font(size), palette.text)
                         .size()
                         .x
                         <= room
                 });
                 if let Some(size) = fits {
-                    theme::text(ui, heading, theme::bold(size), palette.text);
+                    theme::text(ui, heading, font(size), palette.text);
                 }
             });
         });
@@ -1211,7 +1247,7 @@ fn contents(app: &mut App, ui: &mut egui::Ui, grid_art: Option<Rect>) {
                     },
                 );
             }
-            if app.settings.sidebar_grid {
+            if shows_grid(app) {
                 library_grid(
                     app,
                     ui,
@@ -1539,8 +1575,19 @@ struct GridLayout {
     row_height: f32,
 }
 
+/// Wider than the sidebar ever gets: the Library page, whose cards stay
+/// near the size of Home's.
+const PAGE_GRID_FROM_WIDTH: f32 = 600.0;
+const PAGE_GRID_MIN_CARD_WIDTH: f32 = 184.0;
+const PAGE_GRID_MAX_COLUMNS: usize = 10;
+
 fn grid_layout(width: f32) -> GridLayout {
-    let columns = ((width / GRID_MIN_CARD_WIDTH).floor() as usize).clamp(2, GRID_MAX_COLUMNS);
+    let (min_card, max_columns) = if width > PAGE_GRID_FROM_WIDTH {
+        (PAGE_GRID_MIN_CARD_WIDTH, PAGE_GRID_MAX_COLUMNS)
+    } else {
+        (GRID_MIN_CARD_WIDTH, GRID_MAX_COLUMNS)
+    };
+    let columns = ((width / min_card).floor() as usize).clamp(2, max_columns);
     let card_width = (width / columns as f32).max(1.0);
     let card_height = card_width + GRID_TEXT_HEIGHT;
     GridLayout {

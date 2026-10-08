@@ -48,12 +48,20 @@ pub fn side_panel(app: &mut App, ui: &mut egui::Ui) {
         .default_size(app.settings.queue_width)
         .size_range(fit.range.clone())
         .show_separator_line(false)
-        .frame(
-            Frame::new()
-                .fill(palette.panel)
-                .inner_margin(Margin::symmetric(12, 12)),
-        );
+        .frame(Frame::new().fill(palette.window).inner_margin(Margin {
+            left: 0,
+            right: 12,
+            top: 8,
+            bottom: 8,
+        }));
     let response = panel.show(ui, |ui| {
+        let card = ui.max_rect();
+        super::paint_floating_card(ui, &palette, card);
+        // The contents draw in the card below; the panel still spans it,
+        // or egui would shrink the panel to its least width.
+        ui.expand_to_include_rect(card);
+        let mut card_ui = ui.new_child(egui::UiBuilder::new().max_rect(card.shrink(12.0)));
+        let ui = &mut card_ui;
         let window_controls = super::window_controls_reservation(
             ui.ctx(),
             app.show_queue_panel,

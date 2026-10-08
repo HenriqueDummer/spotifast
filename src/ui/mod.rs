@@ -62,7 +62,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             ),
         );
     }
-    player_bar::show(app, ui);
+    // Now playing draws the controls under its cover instead.
+    if app.lyrics_fullscreen.is_some() || *app.page() != Page::NowPlaying {
+        player_bar::show(app, ui);
+    }
     if app.lyrics_fullscreen.is_some() {
         lyrics::fullscreen(app, ui);
     } else {
@@ -82,7 +85,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     dialogs::show(app, ctx);
     update::show(app, ctx);
     widgets::drag_ghost(ctx, &app.palette, app.locale);
-    toasts(app, ctx, theme::PLAYER_BAR_HEIGHT + 16.0);
+    toasts(app, ctx, player_bar::PANEL_HEIGHT + 4.0);
     window_controls(ui, &app.palette, app.locale);
     window_resize(ui);
 }
@@ -253,6 +256,28 @@ fn page_tint(app: &mut App) -> Option<Color32> {
     }
 }
 
+/// A rounded panel lifted off the page, as the floating player and the side
+/// panels are drawn.
+pub(crate) fn paint_floating_card(ui: &egui::Ui, palette: &theme::Palette, rect: Rect) {
+    let radius = 20.0;
+    ui.painter().add(
+        egui::epaint::Shadow {
+            offset: [0, 10],
+            blur: 32,
+            spread: 0,
+            color: palette.shadow,
+        }
+        .as_shape(rect, radius),
+    );
+    ui.painter().rect(
+        rect,
+        radius,
+        palette.panel,
+        Stroke::new(1.0, palette.outline),
+        egui::StrokeKind::Inside,
+    );
+}
+
 /// How strongly the blurred cover shows through the window colour.
 const BACKDROP_STRENGTH: f32 = 0.38;
 
@@ -318,6 +343,25 @@ fn central(app: &mut App, ui: &mut egui::Ui) {
             ui.spacing_mut().scroll.fade.strength = 0.0;
             topbar::show(app, ui);
             let page = app.page().clone();
+            // These two lay themselves out in the space left: the Library
+            // scrolls its own list, and Now playing fits the window.
+            if matches!(page, Page::Library | Page::NowPlaying) {
+                let region = ui.available_rect_before_wrap().shrink2(vec2(
+                    if page == Page::Library {
+                        widgets::PAGE_PADDING
+                    } else {
+                        0.0
+                    },
+                    0.0,
+                ));
+                let mut content = ui.new_child(egui::UiBuilder::new().max_rect(region));
+                if page == Page::Library {
+                    sidebar::page(app, &mut content);
+                } else {
+                    lyrics::stage(app, &mut content);
+                }
+                return;
+            }
             let scroll = crate::autoscroll::show(
                 ui,
                 egui::ScrollArea::vertical()
@@ -349,6 +393,7 @@ fn central(app: &mut App, ui: &mut egui::Ui) {
                                 Page::Radio(seed) => radio::radio(app, ui, &seed),
                                 Page::Queue => queue::page(app, ui),
                                 Page::Settings => settings::show(app, ui),
+                                Page::Library | Page::NowPlaying => {}
                             }
                         });
                 },

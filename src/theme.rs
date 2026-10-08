@@ -641,12 +641,19 @@ pub fn icon_button(
         } else {
             color
         };
-        let scale = if response.is_pointer_button_down_on() {
+        let press = if response.is_pointer_button_down_on() {
             0.92
         } else {
             1.0
         };
-        paint_icon(ui, icon, rect, size * scale, tint);
+        // A glyph that changes (an empty heart filling) pops into place.
+        let t = glyph_change(ui, response.id, icon, 0.42);
+        let pop = if t < 0.55 {
+            egui::lerp(0.6..=1.28, t / 0.55)
+        } else {
+            egui::lerp(1.28..=1.0, (t - 0.55) / 0.45)
+        };
+        paint_icon(ui, icon, rect, size * press * pop, tint);
     }
     focus_ring(ui, &response);
     if tooltip.is_empty() {
@@ -654,6 +661,47 @@ pub fn icon_button(
     } else {
         response.on_hover_text(tooltip)
     }
+}
+
+const REDUCE_MOTION_ID: &str = "reduce-motion";
+
+/// Whether the interface should change at once instead of animating.
+pub fn reduce_motion(ctx: &egui::Context) -> bool {
+    ctx.data(|data| data.get_temp::<bool>(egui::Id::new(REDUCE_MOTION_ID)))
+        .unwrap_or(false)
+}
+
+/// Records [`crate::settings::Settings::reduce_motion`] for this frame.
+pub fn set_reduce_motion(ctx: &egui::Context, reduce: bool) {
+    ctx.data_mut(|data| data.insert_temp(egui::Id::new(REDUCE_MOTION_ID), reduce));
+}
+
+/// Progress, 0 to 1 over `seconds`, since the widget `id` started showing
+/// `icon` in place of another: 1 once settled, the first time it is drawn,
+/// and whenever motion is reduced.
+fn glyph_change(ui: &egui::Ui, id: egui::Id, icon: Icon, seconds: f64) -> f32 {
+    let now = ui.input(|input| input.time);
+    let key = id.with("glyph-change");
+    let since = match ui.data(|data| data.get_temp::<(Icon, f64)>(key)) {
+        Some((shown, since)) if shown == icon => since,
+        held => {
+            let since = if held.is_some() {
+                now
+            } else {
+                f64::NEG_INFINITY
+            };
+            ui.data_mut(|data| data.insert_temp(key, (icon, since)));
+            since
+        }
+    };
+    if reduce_motion(ui.ctx()) {
+        return 1.0;
+    }
+    let t = ((now - since) / seconds).clamp(0.0, 1.0) as f32;
+    if t < 1.0 {
+        ui.ctx().request_repaint();
+    }
+    t
 }
 
 /// Horizontal offset that optically centers play triangles.
@@ -718,13 +766,23 @@ pub fn circle_button(
         let hovered = response.hovered();
         let grow = if hovered { 1.05 } else { 1.0 };
         let radius = diameter / 2.0 * grow;
+        let press = if response.is_pointer_button_down_on() {
+            0.94
+        } else {
+            1.0
+        };
+        let radius = radius * press;
         let fill = if hovered { fill_hover } else { fill };
         ui.painter().circle_filled(rect.center(), radius, fill);
-        let icon_size = diameter * 0.46;
+        // Play and pause trade places with a small spring.
+        let t = glyph_change(ui, response.id, icon, 0.26);
+        let spring = 1.0 + 1.7 * (t - 1.0).powi(3) + 0.7 * (t - 1.0).powi(2);
+        let icon_size = diameter * 0.46 * press * (0.4 + 0.6 * spring);
         let offset = play_glyph_offset(icon, icon_size);
         let icon_rect =
             egui::Rect::from_center_size(rect.center() + offset, Vec2::splat(icon_size));
-        icon.image(icon_color, icon_size).paint_at(ui, icon_rect);
+        icon.image(icon_color.gamma_multiply(t.max(0.2)), icon_size)
+            .paint_at(ui, icon_rect);
     }
     focus_ring(ui, &response);
     if tooltip.is_empty() {
@@ -1012,6 +1070,23 @@ pub fn subtle(ui: &mut egui::Ui, palette: &Palette, label: &str) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A grey cover would make a muddy accent, so the theme's stays; a
+    /// coloured one is brightened enough to mark controls on a dark page,
+    /// and text on it stays readable.
+    #[test]
+    fn grey_covers_keep_the_theme_accent_and_vivid_ones_brighten() {
+        let dark = Palette::dark();
+        assert_eq!(dark.accent_from_art([128, 128, 128]), None);
+        let accent = dark.accent_from_art([30, 60, 140]).expect("a blue cover");
+        let [_, saturation, lightness] = hsl([accent.r(), accent.g(), accent.b()]);
+        assert!((lightness - 0.70).abs() < 0.02, "{lightness}");
+        assert!(saturation >= 0.49, "{saturation}");
+        let amber = dark.with_accent(Color32::from_rgb(0xf2, 0xb2, 0x5c));
+        assert_eq!(amber.on_accent, Color32::from_rgb(0x1a, 0x12, 0x0b));
+        let deep = dark.with_accent(Color32::from_rgb(0x30, 0x20, 0x90));
+        assert_eq!(deep.on_accent, Color32::WHITE);
+    }
 
     /// The logo drawn in the app is the app icon's own picture, not a
     /// disc in the theme's accent colour: it uploads the icon's pixels.

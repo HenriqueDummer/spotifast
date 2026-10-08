@@ -801,6 +801,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let themes_folder = gettext(locale, "Open themes folder");
     let accent_from_art = gettext(locale, "Colour from album art");
     let accent_title = gettext(locale, "Accent colour");
+    let reduce_motion = gettext(locale, "Reduce motion");
     let sidebar_compact = gettext(locale, "Compact library sidebar");
     let tracklist_compact = gettext(locale, "Compact track list");
     let middle_click = gettext(locale, "Middle-click autoscroll");
@@ -888,6 +889,13 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             gettext(
                 locale,
                 "Show the song moving behind the player bar's controls while it plays here.",
+            ),
+        ),
+        RowText::new(
+            reduce_motion.clone(),
+            gettext(
+                locale,
+                "Change covers, tabs and buttons at once instead of sliding or popping them.",
             ),
         ),
     ];
@@ -1028,6 +1036,25 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ACCENT_SWATCHES_WIDTH,
                 |ui| {
                     if accent_swatches(app, ui) {
+                        changed = true;
+                    }
+                },
+            );
+            filtered_row(
+                ui,
+                &palette,
+                &needle,
+                &appearance,
+                &appearance_rows[10],
+                |ui| {
+                    if widgets::switch(
+                        ui,
+                        &palette,
+                        &reduce_motion,
+                        &mut app.settings.reduce_motion,
+                    )
+                    .changed()
+                    {
                         changed = true;
                     }
                 },

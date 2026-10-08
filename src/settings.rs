@@ -307,11 +307,16 @@ pub struct Settings {
     /// Tint the interface with the colour of the playing album's art.
     pub accent_from_art: bool,
     pub accent: AccentChoice,
+    /// Show changes at once instead of sliding, fading or popping them.
+    pub reduce_motion: bool,
     /// A spectrum or waveform of the playing song behind the player bar.
     pub player_bar_vis: PlayerBarVis,
     /// Last local volume, 0..=65535.
     pub volume: u16,
-    /// Whether the library sidebar is visible.
+    /// Whether the classic library sidebar is shown beside the page. The
+    /// Library tab replaced it, so it starts hidden even for profiles that
+    /// saved it shown under its old key.
+    #[serde(rename = "classic_sidebar_visible")]
     pub sidebar_visible: bool,
     /// The playing album's art docked large at the sidebar's bottom.
     pub art_expanded: bool,
@@ -319,6 +324,8 @@ pub struct Settings {
     pub sidebar_compact: bool,
     /// Show the Library as responsive cover cards instead of rows.
     pub sidebar_grid: bool,
+    /// Show the Library page as rows instead of its cover cards.
+    pub library_page_list: bool,
     pub sidebar_width: f32,
     pub lyrics_width: f32,
     pub queue_width: f32,
@@ -477,12 +484,14 @@ impl Default for Settings {
             home: HomeSettings::default(),
             accent_from_art: true,
             accent: AccentChoice::default(),
+            reduce_motion: false,
             player_bar_vis: PlayerBarVis::Off,
             volume: (u16::MAX as u32 * 70 / 100) as u16,
-            sidebar_visible: true,
+            sidebar_visible: false,
             art_expanded: false,
             sidebar_compact: false,
             sidebar_grid: false,
+            library_page_list: false,
             sidebar_width: 250.0,
             lyrics_width: 360.0,
             queue_width: 360.0,
@@ -1110,9 +1119,9 @@ mod tests {
     }
 
     #[test]
-    fn older_settings_keep_the_sidebar_visible() {
-        let settings: Settings = serde_json::from_str("{}").unwrap();
-        assert!(settings.sidebar_visible);
+    fn the_library_tab_replaces_the_sidebar_even_where_it_was_shown() {
+        let settings: Settings = serde_json::from_str(r#"{"sidebar_visible": true}"#).unwrap();
+        assert!(!settings.sidebar_visible);
     }
 
     #[test]

@@ -3048,3 +3048,55 @@ msgstr ""
 #: src/window.rs:12
 msgid "On Wayland, use your desktop's Keep Above shortcut or window rule."
 msgstr ""
+
+#: src/ui/settings.rs
+msgid "Accent colour"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Marks play buttons, liked songs and what is playing. Album art follows the playing cover."
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Album art"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Theme colour"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Amber"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Sky"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Lavender"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Mint"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Rose"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Green"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Reduce motion"
+msgstr ""
+
+#: src/ui/settings.rs
+msgid "Change covers, tabs and buttons at once instead of sliding or popping them."
+msgstr ""
+
+#: src/ui/lyrics.rs
+msgid "Pick something from Home or your Library."
+msgstr ""

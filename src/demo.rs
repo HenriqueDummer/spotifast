@@ -1231,6 +1231,29 @@ mod tests {
     use crate::settings::Settings;
     use std::sync::Arc;
 
+    /// A point given as it was in the full-width player bar at the bottom of
+    /// a 1280x800 window, moved onto the floating player's card.
+    fn on_player_bar(x: f32, y: f32) -> egui::Pos2 {
+        let panel = egui::Rect::from_min_max(
+            egui::pos2(0.0, 800.0 - crate::ui::player_bar::PANEL_HEIGHT),
+            egui::pos2(1280.0, 800.0),
+        );
+        let card = crate::ui::player_bar::card_rect(panel);
+        egui::pos2(
+            card.left() + x,
+            card.top() + y - (800.0 - crate::theme::PLAYER_BAR_HEIGHT),
+        )
+    }
+
+    /// Most of these tests drive the library sidebar, which the Library tab
+    /// replaced but Ctrl+B still shows, so they turn it on.
+    fn classic_settings() -> Settings {
+        Settings {
+            sidebar_visible: true,
+            ..Settings::default()
+        }
+    }
+
     fn accessible_app(name: &str) -> (egui::Context, App) {
         let root =
             std::env::temp_dir().join(format!("spotifast-a11y-{name}-{}", std::process::id()));
@@ -1245,7 +1268,7 @@ mod tests {
                 state: root.join("state"),
                 cache: root.join("cache"),
             },
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -4568,7 +4591,7 @@ mod tests {
         };
         draw(&mut app, vec![]);
         // The margin at the bar's left edge, beside the cover.
-        let empty = egui::pos2(6.0, 796.0);
+        let empty = on_player_bar(6.0, 796.0);
         draw(&mut app, pointer_click(empty, egui::PointerButton::Primary));
         assert!(
             app.actions
@@ -4578,7 +4601,10 @@ mod tests {
 
         // The play button, in the middle of the bar, is still the play button.
         app.actions.clear();
-        let play = egui::pos2(640.0, 800.0 - crate::theme::PLAYER_BAR_HEIGHT / 2.0 - 10.0);
+        let play = egui::pos2(
+            640.0,
+            on_player_bar(0.0, 800.0 - crate::theme::PLAYER_BAR_HEIGHT / 2.0 - 10.0).y,
+        );
         draw(&mut app, pointer_click(play, egui::PointerButton::Primary));
         assert!(
             !app.actions
@@ -4632,14 +4658,17 @@ mod tests {
         let tip = "Click to change the visualizer";
 
         // #given the tooltip shown over the empty margin beside the cover
-        let empty = egui::pos2(6.0, 796.0);
+        let empty = on_player_bar(6.0, 796.0);
         for _ in 0..3 {
             draw(&mut app, empty);
         }
         assert!(draw(&mut app, empty).iter().any(|text| text == tip));
 
         // #when the pointer moves onto the play button
-        let play = egui::pos2(640.0, 800.0 - crate::theme::PLAYER_BAR_HEIGHT / 2.0 - 10.0);
+        let play = egui::pos2(
+            640.0,
+            on_player_bar(0.0, 800.0 - crate::theme::PLAYER_BAR_HEIGHT / 2.0 - 10.0).y,
+        );
         for _ in 0..3 {
             draw(&mut app, play);
         }
@@ -5510,7 +5539,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -5584,7 +5613,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -5637,7 +5666,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -5718,7 +5747,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -5801,7 +5830,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -5897,7 +5926,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -6146,7 +6175,7 @@ mod tests {
                 state: root.join("state"),
                 cache: root.join("cache"),
             },
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -6217,7 +6246,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -6335,7 +6364,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -6403,7 +6432,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -6816,7 +6845,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -6829,7 +6858,7 @@ mod tests {
             frame(&ctx, &mut app);
         }
 
-        let start = egui::pos2(40.0, 755.0);
+        let start = on_player_bar(40.0, 755.0);
         frame_events(
             &ctx,
             &mut app,
@@ -6903,7 +6932,7 @@ mod tests {
 
         // Drag the now-playing song from the bottom-left player, same
         // starting point as the equivalent playlist-insert test.
-        let start = egui::pos2(40.0, 755.0);
+        let start = on_player_bar(40.0, 755.0);
         frame_events(
             &ctx,
             &mut app,
@@ -6973,7 +7002,7 @@ mod tests {
         // close/save buttons and tab chips.
         let end = egui::pos2(1100.0, 300.0);
 
-        let start = egui::pos2(40.0, 755.0);
+        let start = on_player_bar(40.0, 755.0);
         frame_events(
             &ctx,
             &mut app,
@@ -7399,9 +7428,11 @@ mod tests {
         frame_events(
             &ctx,
             &mut app,
+            // 14 points inside the queue card's list, which ends 20 points
+            // (the panel's margin and the card's) above the player.
             vec![egui::Event::PointerMoved(egui::pos2(
                 start.x,
-                800.0 - crate::theme::PLAYER_BAR_HEIGHT - 14.0,
+                800.0 - crate::ui::player_bar::PANEL_HEIGHT - 20.0 - 14.0,
             ))],
         );
         for _ in 0..400 {
@@ -7503,7 +7534,7 @@ mod tests {
                 node.role() == Role::Button
                     && node.label() == Some("Queue")
                     && node.bounds().is_some_and(|bounds| {
-                        bounds.y0 >= f64::from(800.0 - crate::theme::PLAYER_BAR_HEIGHT)
+                        bounds.y0 >= f64::from(800.0 - crate::ui::player_bar::PANEL_HEIGHT)
                     })
             })
             .expect("the player bar's Queue button")
@@ -7511,7 +7542,7 @@ mod tests {
         let button = bounds_of(button);
 
         let drag_to = |app: &mut App, end: egui::Pos2| {
-            let start = egui::pos2(40.0, 755.0);
+            let start = on_player_bar(40.0, 755.0);
             frame_events(
                 &ctx,
                 app,
@@ -7602,7 +7633,7 @@ mod tests {
         let target_row = row_rect("Queued 1");
         let end = egui::pos2(target_row.left() + 130.0, target_row.top() + 1.0);
 
-        let start = egui::pos2(40.0, 755.0);
+        let start = on_player_bar(40.0, 755.0);
         frame_events(
             &ctx,
             &mut app,
@@ -7680,7 +7711,7 @@ mod tests {
         // still appends at the end, ignoring the row it landed on.
         let end = egui::pos2(bounds.x0 as f32 + 130.0, bounds.y0 as f32 + 2.0);
 
-        let start = egui::pos2(40.0, 755.0);
+        let start = on_player_bar(40.0, 755.0);
         frame_events(
             &ctx,
             &mut app,
@@ -7746,7 +7777,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -7824,7 +7855,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -8016,7 +8047,7 @@ mod tests {
             let tree = accessible_frame(&ctx, &mut app, vec![]);
             let target = row(&tree, "Liked Songs").center();
             app.saved.insert("spotify:track:trk0".into(), false);
-            let source = egui::pos2(40.0, 755.0);
+            let source = on_player_bar(40.0, 755.0);
             accessible_frame(
                 &ctx,
                 &mut app,
@@ -8121,7 +8152,7 @@ mod tests {
                         let row = row_rect(source_item.name());
                         egui::pos2(row.left() + 80.0, row.center().y)
                     } else {
-                        egui::pos2(40.0, 755.0)
+                        on_player_bar(40.0, 755.0)
                     };
                     let row = row_rect(&format!("Destination {}", position.min(3)));
                     let end = egui::pos2(
@@ -8565,7 +8596,7 @@ mod tests {
                 &mut app,
                 vec![egui::Event::PointerMoved(egui::pos2(
                     112.0,
-                    800.0 - crate::theme::PLAYER_BAR_HEIGHT - 14.0,
+                    800.0 - crate::ui::player_bar::PANEL_HEIGHT - 14.0,
                 ))],
             );
             for _ in 0..400 {
@@ -8600,7 +8631,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -8891,7 +8922,7 @@ mod tests {
         let mut app = App::new(
             &waker,
             dirs,
-            Settings::default(),
+            classic_settings(),
             AppOptions {
                 media_controls: false,
                 restore_sign_in: false,
@@ -8964,6 +8995,7 @@ mod tests {
         // right edge, so the pill reaches past the rect the field reports.
         const FIELD_RIGHT_INSET: f32 = 30.0;
         let (ctx, mut app) = accessible_app("topbar-badges");
+        app.settings.sidebar_visible = false;
         app.open(Page::Playlist("pl1".into()));
         for panel in [None, Some("queue"), Some("lyrics")] {
             app.show_queue_panel = panel == Some("queue");

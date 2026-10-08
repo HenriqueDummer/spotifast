@@ -43,7 +43,8 @@ const RIGHT_CONTROLS_WIDTH: f32 =
 
 /// What precedes the field until the bar has drawn once: the page padding,
 /// the back and forward buttons and the gaps after them.
-const LEAD_GUESS: f32 = super::widgets::PAGE_PADDING + 2.0 * 32.0 + 3.0 * ITEM_SPACING + 8.0;
+const LEAD_GUESS: f32 =
+    super::widgets::PAGE_PADDING + 2.0 * 32.0 + 4.0 * ITEM_SPACING + 16.0 + ICON_TABS_WIDTH;
 /// A badge collapsed to its icon: a square as tall as its 12.5 pt label.
 const BADGE_CHIP: f32 = 15.0 + BADGE_PADDING_Y;
 
@@ -192,6 +193,130 @@ fn nav_button(
     }
 }
 
+/// The room left after the back and forward buttons below which the tabs
+/// show only their icons, so the search field keeps a usable width.
+const TAB_LABELS_MIN_ROOM: f32 = 980.0;
+const TAB_HEIGHT: f32 = 36.0;
+const TAB_PAD: f32 = 4.0;
+const TAB_COUNT: usize = 4;
+const ICON_TAB_WIDTH: f32 = TAB_HEIGHT + 4.0;
+/// The tabs at their narrowest, showing only icons.
+const ICON_TABS_WIDTH: f32 =
+    TAB_COUNT as f32 * ICON_TAB_WIDTH + TAB_PAD * 2.0 + 2.0 * (TAB_COUNT - 1) as f32;
+
+/// Now playing, Home, Search and Library in one pill. The lit tab's
+/// background slides to the tab that is opened.
+/// Returns the width the tabs took.
+fn tabs(app: &mut App, ui: &mut egui::Ui, labels: bool) -> f32 {
+    let palette = app.palette;
+    let locale = app.locale;
+    let current = app.page().clone();
+    let items = [
+        (
+            Page::NowPlaying,
+            Icon::AudioLines,
+            gettext(locale, "Now playing"),
+        ),
+        (Page::Home, Icon::House, gettext(locale, "Home")),
+        (Page::Search, Icon::Search, gettext(locale, "Search")),
+        (Page::Library, Icon::Library, gettext(locale, "Library")),
+    ];
+    let font = theme::semibold(14.0);
+    let widths: Vec<f32> = items
+        .iter()
+        .map(|(_, _, label)| {
+            if labels {
+                ui.painter()
+                    .layout_no_wrap(label.to_string(), font.clone(), palette.text)
+                    .size()
+                    .x
+                    + 32.0
+            } else {
+                ICON_TAB_WIDTH
+            }
+        })
+        .collect();
+    let total = widths.iter().sum::<f32>() + TAB_PAD * 2.0 + 2.0 * (TAB_COUNT - 1) as f32;
+    let (outer, _) =
+        ui.allocate_exact_size(vec2(total, TAB_HEIGHT + TAB_PAD * 2.0), Sense::hover());
+    ui.painter().rect_filled(
+        outer,
+        outer.height() / 2.0,
+        palette.window.gamma_multiply(0.6),
+    );
+    let mut x = outer.left() + TAB_PAD;
+    let rects: Vec<egui::Rect> = widths
+        .iter()
+        .map(|width| {
+            let rect = egui::Rect::from_min_size(
+                egui::pos2(x, outer.top() + TAB_PAD),
+                vec2(*width, TAB_HEIGHT),
+            );
+            x += width + 2.0;
+            rect
+        })
+        .collect();
+    let selected = items.iter().position(|(page, ..)| *page == current);
+    if let Some(index) = selected {
+        let id = ui.id().with("tab-pill");
+        let seconds = if app.settings.reduce_motion {
+            0.0
+        } else {
+            0.24
+        };
+        let left = ui.ctx().animate_value_with_time(
+            id.with("left"),
+            rects[index].left() - outer.left(),
+            seconds,
+        );
+        let width =
+            ui.ctx()
+                .animate_value_with_time(id.with("width"), rects[index].width(), seconds);
+        ui.painter().rect_filled(
+            egui::Rect::from_min_size(
+                egui::pos2(outer.left() + left, rects[index].top()),
+                vec2(width, TAB_HEIGHT),
+            ),
+            TAB_HEIGHT / 2.0,
+            palette.text,
+        );
+    }
+    for (index, ((page, icon, label), rect)) in items.iter().zip(&rects).enumerate() {
+        let mut response = ui.interact(*rect, ui.id().with(("tab", index)), Sense::click());
+        let on = selected == Some(index);
+        let color = if on {
+            palette.window
+        } else if response.hovered() {
+            palette.text
+        } else {
+            palette.secondary
+        };
+        if labels {
+            ui.painter().text(
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                label.as_ref(),
+                font.clone(),
+                color,
+            );
+        } else {
+            theme::paint_icon(ui, *icon, *rect, 18.0, color);
+            response = response.on_hover_text(label.as_ref());
+        }
+        response.widget_info(|| {
+            egui::WidgetInfo::selected(egui::WidgetType::Button, true, on, label.as_ref())
+        });
+        theme::focus_ring(ui, &response);
+        if response.clicked() && !on {
+            app.actions.push(match page {
+                Page::Search => Action::FocusSearch,
+                page => Action::Open(page.clone()),
+            });
+        }
+    }
+    total
+}
+
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     let locale = app.locale;
@@ -222,28 +347,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         |ui| {
             ui.add_space(super::widgets::PAGE_PADDING);
             ui.spacing_mut().item_spacing.x = ITEM_SPACING;
-            if !app.settings.sidebar_visible {
-                if nav_button(
-                    ui,
-                    &palette,
-                    Icon::PanelLeft,
-                    true,
-                    super::keys::platform_shortcut(
-                        &gettext(locale, "Show sidebar (Ctrl+B)"),
-                        &gettext(locale, "Show sidebar (Cmd+B)"),
-                    ),
-                )
-                .clicked()
-                {
-                    app.actions.push(Action::ToggleSidebar);
-                }
-                ui.add_space(2.0);
-            }
-            if !app.settings.sidebar_visible
-                && nav_button(ui, &palette, Icon::House, true, &gettext(locale, "Home")).clicked()
-            {
-                app.actions.push(Action::Open(Page::Home));
-            }
             if nav_button(
                 ui,
                 &palette,
@@ -266,6 +369,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             {
                 app.actions.push(Action::Forward);
             }
+            ui.add_space(8.0);
+            let labels = ui.available_width() - window_controls.topbar_width >= TAB_LABELS_MIN_ROOM;
+            let tabs_width = tabs(app, ui, labels);
             ui.add_space(8.0);
 
             // The badges sit at the right end but grow with their text, so
@@ -319,7 +425,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             // What sits before the field: the page padding, the navigation
             // buttons, and any window buttons. The panels beside the page
             // keep room for it (`least_width`).
-            let lead = width - ui.available_width() + window_controls.topbar_width;
+            // The tabs can always fall back to their icons, so the bar's
+            // least width counts them at that size.
+            let lead = width - ui.available_width() + window_controls.topbar_width
+                - (tabs_width - ICON_TABS_WIDTH);
             ui.ctx().data_mut(|data| data.insert_temp(lead_id(), lead));
             let fit = topbar_fit(search_room, controls, badges(true), badges(false));
             let search_width = fit.search;

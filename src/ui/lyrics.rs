@@ -47,12 +47,20 @@ pub fn side_panel(app: &mut App, ui: &mut egui::Ui) {
         .default_size(app.settings.lyrics_width)
         .size_range(fit.range.clone())
         .show_separator_line(false)
-        .frame(
-            Frame::new()
-                .fill(palette.panel)
-                .inner_margin(Margin::symmetric(12, 12)),
-        );
+        .frame(Frame::new().fill(palette.window).inner_margin(Margin {
+            left: 0,
+            right: 12,
+            top: 8,
+            bottom: 8,
+        }));
     let response = panel.show(ui, |ui| {
+        let card = ui.max_rect();
+        super::paint_floating_card(ui, &palette, card);
+        // The contents draw in the card below; the panel still spans it,
+        // or egui would shrink the panel to its least width.
+        ui.expand_to_include_rect(card);
+        let mut card_ui = ui.new_child(egui::UiBuilder::new().max_rect(card.shrink(12.0)));
+        let ui = &mut card_ui;
         let window_controls = super::window_controls_reservation(
             ui.ctx(),
             app.show_queue_panel,
@@ -293,7 +301,7 @@ pub fn fullscreen(app: &mut App, ui: &mut egui::Ui) {
             background(app, ui, rect);
             let top = theme::titlebar_inset(ui.ctx()) + 24.0;
             if app.now_playing().is_some() && rect.width() >= COVER_BESIDE_MIN_WIDTH {
-                with_cover(app, ui, rect, top);
+                with_cover(app, ui, rect, top, false);
                 return;
             }
             let width = fullscreen_content_width(rect.width());
@@ -320,17 +328,25 @@ const COVER_BESIDE_MIN_WIDTH: f32 = 900.0;
 /// Full screen with the cover large: beside the lyrics when there are
 /// words to follow, and alone in the middle when there are none, a calm
 /// view of what is playing.
-fn with_cover(app: &mut App, ui: &mut egui::Ui, rect: Rect, top: f32) {
+///
+/// On the Now playing page (`stage`) there is no header, and the playback
+/// controls sit under the cover.
+fn with_cover(app: &mut App, ui: &mut egui::Ui, rect: Rect, top: f32, stage: bool) {
     let outer = Rect::from_min_max(
         pos2(rect.left() + 48.0, rect.top() + top),
         pos2(rect.right() - 48.0, rect.bottom() - 40.0),
     );
-    let mut header = ui.new_child(UiBuilder::new().max_rect(outer));
-    fullscreen_header(app, &mut header);
-    let below = Rect::from_min_max(
-        pos2(outer.left(), header.min_rect().bottom() + 24.0),
-        outer.max,
-    );
+    let below = if stage {
+        outer
+    } else {
+        let mut header = ui.new_child(UiBuilder::new().max_rect(outer));
+        fullscreen_header(app, &mut header);
+        Rect::from_min_max(
+            pos2(outer.left(), header.min_rect().bottom() + 24.0),
+            outer.max,
+        )
+    };
+    let controls = if stage { STAGE_CONTROLS_HEIGHT } else { 0.0 };
     // The cover moves aside only for words to read. While they load it
     // stays in the middle, so a song that turns out to have none never
     // moves at all.
@@ -339,15 +355,18 @@ fn with_cover(app: &mut App, ui: &mut egui::Ui, rect: Rect, top: f32) {
         // The cover and the lyrics are one group, centred in the window.
         let gap = 64.0;
         let side = (below.width() * 0.38)
-            .min(below.height() - 90.0)
+            .min(below.height() - 90.0 - controls)
             .clamp(200.0, 520.0);
         let lyrics_width = (below.width() - side - gap).min(LYRICS_BESIDE_WIDTH);
         let left = below.center().x - (side + gap + lyrics_width) / 2.0;
         let column = Rect::from_min_size(
-            pos2(left, below.center().y - (side + 90.0) / 2.0),
+            pos2(left, below.center().y - (side + 90.0 + controls) / 2.0),
             vec2(side, side + 90.0),
         );
         big_cover(app, ui, column, Align::Min);
+        if stage {
+            stage_controls(app, ui, column);
+        }
         let lyrics = Rect::from_min_max(
             pos2(column.right() + gap, below.top()),
             pos2(column.right() + gap + lyrics_width, below.bottom()),
@@ -355,11 +374,18 @@ fn with_cover(app: &mut App, ui: &mut egui::Ui, rect: Rect, top: f32) {
         let mut content = ui.new_child(UiBuilder::new().max_rect(lyrics));
         fullscreen_contents(app, &mut content);
     } else {
-        let side = (below.height() - 140.0)
+        let side = (below.height() - 140.0 - controls)
             .min(below.width() * 0.5)
             .clamp(200.0, 560.0);
-        let column = Rect::from_center_size(below.center(), vec2(side, side + 90.0));
+        let column = Rect::from_center_size(
+            below.center() - vec2(0.0, controls / 2.0),
+            vec2(side, side + 90.0),
+        );
         big_cover(app, ui, column, Align::Center);
+        if stage {
+            stage_controls(app, ui, column);
+            return;
+        }
         // Why there are no words, quietly, under the song, or that they
         // are still being fetched.
         let (heading, detail) = match &app.lyrics {
@@ -418,6 +444,143 @@ fn with_cover(app: &mut App, ui: &mut egui::Ui, rect: Rect, top: f32) {
     }
 }
 
+/// Paints a big cover shifted sideways by `shift` covers' widths (scaled
+/// down as it moves) and at `opacity`.
+fn paint_big_cover(
+    app: &App,
+    ui: &mut egui::Ui,
+    url: Option<&str>,
+    cover: Rect,
+    shift: f32,
+    opacity: f32,
+) {
+    let travel = shift.abs().min(1.0);
+    let rect = Rect::from_center_size(
+        cover.center() + vec2(shift * cover.width() * 0.36, 0.0),
+        cover.size() * (1.0 - 0.14 * travel),
+    );
+    let radius = 10.0;
+    let mut layer = ui.new_child(UiBuilder::new().max_rect(rect));
+    layer.multiply_opacity(opacity);
+    layer.painter().add(
+        egui::epaint::Shadow {
+            offset: [0, 18],
+            blur: 48,
+            spread: 0,
+            color: Color32::from_black_alpha(140),
+        }
+        .as_shape(rect, radius),
+    );
+    widgets::paint_cover(
+        &layer,
+        &theme::Palette::dark(),
+        url,
+        rect,
+        radius,
+        Icon::Music,
+        Some(app.backend.art()),
+    );
+}
+
+/// The cover shown before `art`, and progress 0 to 1 through the slide from
+/// it, which starts whenever the playing cover changes.
+fn cover_change(ui: &egui::Ui, art: Option<&str>) -> (Option<String>, f32) {
+    let key = egui::Id::new("big-cover-change");
+    let now = ui.input(|input| input.time);
+    type Held = (Option<String>, Option<String>, f64);
+    let held = ui.data(|data| data.get_temp::<Held>(key));
+    let (previous, since) = match held {
+        Some((current, previous, since)) if current.as_deref() == art => (previous, since),
+        Some((current, _, _)) => {
+            ui.data_mut(|data| {
+                data.insert_temp::<Held>(key, (art.map(str::to_owned), current.clone(), now))
+            });
+            (current, now)
+        }
+        None => {
+            ui.data_mut(|data| {
+                data.insert_temp::<Held>(key, (art.map(str::to_owned), None, f64::NEG_INFINITY))
+            });
+            (None, f64::NEG_INFINITY)
+        }
+    };
+    if theme::reduce_motion(ui.ctx()) {
+        return (None, 1.0);
+    }
+    let t = ((now - since) / 0.48).clamp(0.0, 1.0) as f32;
+    if t < 1.0 {
+        ui.ctx().request_repaint();
+    }
+    (previous, t)
+}
+
+/// Room under the cover's title for the playback controls and the row of
+/// device, volume, queue and lyrics buttons.
+const STAGE_CONTROLS_HEIGHT: f32 = 128.0;
+
+/// The Now playing page: the playing song's cover, its controls, and its
+/// lyrics, over the blurred cover the page already shows.
+pub fn stage(app: &mut App, ui: &mut egui::Ui) {
+    app.request_lyrics();
+    let rect = ui.available_rect_before_wrap();
+    let palette = app.palette;
+    if app.now_playing().is_none() {
+        let center = rect.center();
+        ui.painter().text(
+            center - vec2(0.0, 14.0),
+            egui::Align2::CENTER_BOTTOM,
+            gettext(app.locale, "Nothing playing"),
+            theme::display(32.0),
+            palette.text,
+        );
+        ui.painter().text(
+            center,
+            egui::Align2::CENTER_TOP,
+            gettext(app.locale, "Pick something from Home or your Library."),
+            theme::regular(14.0),
+            palette.secondary,
+        );
+        return;
+    }
+    if rect.width() >= COVER_BESIDE_MIN_WIDTH {
+        with_cover(app, ui, rect, 8.0, true);
+        return;
+    }
+    let side = (rect.height() - 90.0 - STAGE_CONTROLS_HEIGHT - 48.0)
+        .min(rect.width() - 48.0)
+        .clamp(160.0, 420.0);
+    let column = Rect::from_center_size(
+        rect.center() - vec2(0.0, STAGE_CONTROLS_HEIGHT / 2.0),
+        vec2(side, side + 90.0),
+    );
+    big_cover(app, ui, column, Align::Center);
+    stage_controls(app, ui, column);
+}
+
+/// The player bar's controls under the cover column, then its other buttons.
+fn stage_controls(app: &mut App, ui: &mut egui::Ui, column: Rect) {
+    let now = app.now_playing();
+    let width = column.width().max(360.0);
+    let transport = Rect::from_center_size(
+        pos2(
+            column.center().x,
+            column.bottom() + 8.0 + theme::PLAYER_BAR_HEIGHT / 2.0,
+        ),
+        vec2(width, theme::PLAYER_BAR_HEIGHT),
+    );
+    super::player_bar::transport(app, ui, now.as_ref(), transport);
+    let extras = Rect::from_center_size(
+        pos2(column.center().x, transport.bottom() + 16.0),
+        vec2(width, 30.0),
+    );
+    let mut extras_ui = ui.new_child(
+        UiBuilder::new()
+            .max_rect(extras)
+            .layout(Layout::right_to_left(Align::Center)),
+    );
+    super::player_bar::extras(app, &mut extras_ui, now.as_ref());
+}
+
 /// The playing song's cover filling the top of `column`, with its title and
 /// artists beneath, aligned to its left edge or centred.
 fn big_cover(app: &App, ui: &mut egui::Ui, column: Rect, align: Align) {
@@ -426,25 +589,13 @@ fn big_cover(app: &App, ui: &mut egui::Ui, column: Rect, align: Align) {
     };
     let side = column.width();
     let cover = Rect::from_min_size(column.min, vec2(side, side));
-    let radius = 10.0;
-    ui.painter().add(
-        egui::epaint::Shadow {
-            offset: [0, 18],
-            blur: 48,
-            spread: 0,
-            color: Color32::from_black_alpha(140),
-        }
-        .as_shape(cover, radius),
-    );
-    widgets::paint_cover(
-        ui,
-        &theme::Palette::dark(),
-        now.art_url.as_deref().or(now.art_small.as_deref()),
-        cover,
-        radius,
-        Icon::Music,
-        Some(app.backend.art()),
-    );
+    let art = now.art_url.as_deref().or(now.art_small.as_deref());
+    let (previous, t) = cover_change(ui, art);
+    let eased = 1.0 - (1.0 - t).powi(3);
+    if let Some(previous) = previous.filter(|_| t < 1.0) {
+        paint_big_cover(app, ui, Some(&previous), cover, -eased, 1.0 - t);
+    }
+    paint_big_cover(app, ui, art, cover, 1.0 - eased, t);
     let words = Rect::from_min_max(pos2(column.left(), cover.bottom() + 18.0), column.max);
     let mut text = ui.new_child(
         UiBuilder::new()
@@ -455,7 +606,7 @@ fn big_cover(app: &App, ui: &mut egui::Ui, column: Rect, align: Align) {
     text.add(
         egui::Label::new(
             egui::RichText::new(&now.title)
-                .font(theme::semibold(22.0))
+                .font(theme::display(30.0))
                 .color(Color32::WHITE),
         )
         .truncate(),
@@ -463,7 +614,7 @@ fn big_cover(app: &App, ui: &mut egui::Ui, column: Rect, align: Align) {
     text.add(
         egui::Label::new(
             egui::RichText::new(&now.subtitle)
-                .font(theme::regular(14.0))
+                .font(theme::regular(15.0))
                 .color(Color32::from_gray(225)),
         )
         .truncate(),

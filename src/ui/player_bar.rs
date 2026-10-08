@@ -1,6 +1,6 @@
 //! The now-playing bar along the bottom of the window.
 
-use egui::{Align, Color32, Frame, Layout, Margin, Rect, Sense, UiBuilder, Vec2, pos2, vec2};
+use egui::{Align, Color32, Frame, Layout, Rect, Sense, UiBuilder, Vec2, pos2, vec2};
 
 use crate::app::{App, NowPlaying};
 use crate::i18n::gettext;
@@ -44,23 +44,60 @@ pub(crate) fn end_tint_session(ctx: &egui::Context) {
     ctx.data_mut(|data| data.remove::<u64>(egui::Id::new(TINT_SESSION_ID)));
 }
 
+/// Space around the floating player: above it, below it, and the least at
+/// its sides.
+const FLOAT_TOP: f32 = 4.0;
+const FLOAT_BOTTOM: f32 = 16.0;
+const FLOAT_SIDE: f32 = 16.0;
+/// The widest the floating player grows.
+const FLOAT_MAX_WIDTH: f32 = 1100.0;
+
+/// The height the floating player takes at the window's bottom.
+pub(crate) const PANEL_HEIGHT: f32 = theme::PLAYER_BAR_HEIGHT + FLOAT_TOP + FLOAT_BOTTOM;
+
+/// Where the floating card sits in the player's panel.
+pub(crate) fn card_rect(panel: Rect) -> Rect {
+    let width = (panel.width() - 2.0 * FLOAT_SIDE).min(FLOAT_MAX_WIDTH);
+    Rect::from_min_size(
+        pos2(panel.center().x - width / 2.0, panel.top() + FLOAT_TOP),
+        vec2(width, theme::PLAYER_BAR_HEIGHT),
+    )
+}
+
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     let fill = eased_fill(ui.ctx(), palette.panel, app.now_playing_tint());
     egui::Panel::bottom("player-bar")
-        .exact_size(theme::PLAYER_BAR_HEIGHT)
+        .exact_size(PANEL_HEIGHT)
         .resizable(false)
         .show_separator_line(false)
-        .frame(
-            Frame::new()
-                .fill(fill)
-                .inner_margin(Margin::symmetric(16, 0)),
-        )
+        .frame(Frame::new().fill(palette.window))
         .show(ui, |ui| {
+            let card = card_rect(ui.max_rect());
+            let radius = 20.0;
+            ui.painter().add(
+                egui::epaint::Shadow {
+                    offset: [0, 10],
+                    blur: 32,
+                    spread: 0,
+                    color: palette.shadow,
+                }
+                .as_shape(card, radius),
+            );
+            ui.painter().rect(
+                card,
+                radius,
+                fill,
+                egui::Stroke::new(1.0, palette.outline),
+                egui::StrokeKind::Inside,
+            );
+            let mut inner = ui.new_child(UiBuilder::new().max_rect(card.shrink2(vec2(16.0, 0.0))));
+            let ui = &mut inner;
+            ui.set_clip_rect(card);
             let rect = ui.max_rect();
             let now = app.now_playing();
-            // The whole bar, margins included, behind everything else.
-            let behind = rect.expand2(vec2(16.0, 0.0));
+            // The whole card, margins included, behind everything else.
+            let behind = card;
             if visualizer(app, ui, behind, now.as_ref()) {
                 ui.ctx().request_repaint_after(VIS_FRAME);
             }
@@ -84,11 +121,6 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             if empty.clicked() {
                 app.actions.push(Action::CyclePlayerBarVis);
             }
-            ui.painter().hline(
-                rect.x_range(),
-                rect.top() + 0.5,
-                egui::Stroke::new(1.0, palette.outline),
-            );
             let width = rect.width();
             let side = (width * 0.3).clamp(200.0, 420.0);
             let cy = rect.center().y;
@@ -569,7 +601,7 @@ fn now_playing_block(app: &mut App, ui: &mut egui::Ui, region: Rect, now: Option
     }
 }
 
-fn transport(app: &mut App, ui: &mut egui::Ui, now: Option<&NowPlaying>, region: Rect) {
+pub(super) fn transport(app: &mut App, ui: &mut egui::Ui, now: Option<&NowPlaying>, region: Rect) {
     let palette = app.palette;
     // Everything here is placed with explicit rects: egui's implicit rows
     // centre each widget in the row height known when it is added, which
@@ -796,7 +828,7 @@ fn transport(app: &mut App, ui: &mut egui::Ui, now: Option<&NowPlaying>, region:
     );
 }
 
-fn extras(app: &mut App, ui: &mut egui::Ui, now: Option<&NowPlaying>) {
+pub(super) fn extras(app: &mut App, ui: &mut egui::Ui, now: Option<&NowPlaying>) {
     let palette = app.palette;
     ui.spacing_mut().item_spacing.x = 6.0;
     let volume = now

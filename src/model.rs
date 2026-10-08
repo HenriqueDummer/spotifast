@@ -125,6 +125,10 @@ pub enum Page {
     Radio(String),
     Queue,
     Settings,
+    /// Playlists, albums, artists and podcasts, as cards or rows.
+    Library,
+    /// The playing song, large, with its controls and lyrics.
+    NowPlaying,
 }
 
 impl Page {
@@ -145,6 +149,8 @@ impl Page {
             Page::Radio(seed) => format!("radio:{seed}"),
             Page::Queue => "queue".into(),
             Page::Settings => "settings".into(),
+            Page::Library => "library".into(),
+            Page::NowPlaying => "now-playing".into(),
         }
     }
 
@@ -160,6 +166,8 @@ impl Page {
             "episodes" => Page::Episodes,
             "queue" => Page::Queue,
             "settings" => Page::Settings,
+            "library" => Page::Library,
+            "now-playing" => Page::NowPlaying,
             other => {
                 let (kind, id) = other.split_once(':')?;
                 match kind {
@@ -1104,6 +1112,8 @@ pub enum Action {
         sort: crate::settings::LibrarySort,
     },
     SetLibraryGrid(bool),
+    /// Cards (false) or rows (true) on the Library page.
+    SetLibraryPageList(bool),
     ToggleLibraryFolder(String),
     ArrangeLibrary {
         pinned: Vec<String>,
@@ -1303,5 +1313,20 @@ mod finite_scroll_tests {
         assert_eq!(list.window_at(150, 50), None);
         list.fail("offline".into());
         assert_eq!(list.window_at(150, 50), None);
+    }
+}
+
+#[cfg(test)]
+mod page_tests {
+    use super::Page;
+
+    /// The Library and Now playing tabs survive the session's saved page and
+    /// the demo's `--demo-page` flag.
+    #[test]
+    fn the_tab_pages_round_trip_through_their_names() {
+        for page in [Page::Library, Page::NowPlaying] {
+            assert_eq!(Page::decode(&page.encode()), Some(page));
+        }
+        assert_eq!(Page::decode("now-playing"), Some(Page::NowPlaying));
     }
 }
